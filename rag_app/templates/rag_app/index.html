@@ -1,0 +1,136 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Senior Engineer Simulator - Code.AI</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <link rel="stylesheet" href="{% static 'rag_app/style.css' %}?v=2.3">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar context/settings -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+                    </div>
+                    <div>
+                        <h2>Code.AI</h2>
+                        <p class="subtitle">Senior Engineer Simulator</p>
+                    </div>
+                </div>
+                <button id="theme-toggle" class="btn-icon btn-theme" title="Toggle Dark Mode">
+                    <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    <svg class="icon-sun hidden" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                </button>
+            </div>
+
+            <div class="sidebar-content">
+                <div class="indexing-section box">
+                    <div class="box-header">
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        <h3>Workspace</h3>
+                    </div>
+                    <p class="helper-text">Point the engine to a local codebase directory to index its contents securely for fast retrieval.</p>
+                    <div class="input-group">
+                        <input type="text" id="repo-path" placeholder="C:\Projects\my-app" />
+                        <button id="btn-ingest" class="btn-primary">
+                            <span>Index Codebase</span>
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        </button>
+                    </div>
+                    <div id="ingest-status-msg" class="status-message hidden">Starting ingestion...</div>
+                </div>
+
+                <div class="stats-section box">
+                    <div class="box-header">
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                        <h3>System Status</h3>
+                    </div>
+                    <div class="stat-row">
+                        <span>Database:</span>
+                        <span id="db-status-badge" class="badge warning">Wait</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Vector Chunks:</span>
+                        <span id="chunk-count" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Background Task:</span>
+                        <span id="bg-task-status" class="stat-value">Idle</span>
+                    </div>
+                    <button id="btn-refresh-status" class="btn-secondary">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Refresh State
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <p>Powered by RAG Engine v1.0</p>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="header-title">
+                    <h2>Engineering Assistant</h2>
+                </div>
+                <div class="status-indicator">
+                    <span class="dot pulse"></span>
+                    <span id="connection-status">Online</span>
+                </div>
+            </header>
+
+            <div class="chat-messages" id="chat-messages">
+                <!-- Welcome Message -->
+                <div class="message assistant welcome-message">
+                    <div class="avatar assistant-avatar">
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>
+                    </div>
+                    <div class="message-content">
+                        <h3>Hi there, I'm your AI Senior Engineer.</h3>
+                        <p>I can help you navigate this codebase, understand complex architectures, find bugs, or plan new features using Retrieval-Augmented Generation.</p>
+                        
+                        <div class="quick-prompts">
+                            <button class="quick-prompt" data-prompt="Can you explain the overall architecture of this project?">Explain Architecture</button>
+                            <button class="quick-prompt" data-prompt="Where are the main API routes defined?">Find API Routes</button>
+                            <button class="quick-prompt" data-prompt="How is the database connection handled?">Database Setup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <form id="chat-form">
+                    <div class="input-wrapper">
+                        <textarea id="chat-input" placeholder="Ask about the codebase... (e.g. 'How does auth work?')" rows="1"></textarea>
+                        <button type="submit" id="btn-send" class="btn-icon" disabled>
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </div>
+                    <div class="input-footer">
+                        <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{% static 'rag_app/app.js' %}"></script>
+</body>
+</html>
