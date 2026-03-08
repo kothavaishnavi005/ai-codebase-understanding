@@ -1,5 +1,8 @@
 .env
+*.db
+*.sqlite3
 __pycache__/
 *.pyc
-*.db
-vector_store/
+chroma_db/
+vector_db/
+db/
