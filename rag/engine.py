@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict, Any
 
 from langchain_chroma import Chroma
-from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -61,12 +61,21 @@ class RAGEngine:
         )
 
         # ----------------------------------------------------
-        # Local Ollama LLM
+        # Local Ollama LLM (Replaced with Gemini)
         # ----------------------------------------------------
 
-        self.llm = ChatOllama(
-            model="llama3.2:1b",
-            temperature=0.1
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.error("GEMINI_API_KEY environment variable is missing.")
+            raise ValueError("Configuration Error: GEMINI_API_KEY is not set. Please set it in .env or your environment variables.")
+
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            temperature=0.1,
+            google_api_key=api_key
         )
 
         # ----------------------------------------------------
