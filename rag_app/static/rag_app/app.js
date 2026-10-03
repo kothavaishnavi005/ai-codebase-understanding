@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatInput = document.getElementById('chat-input');
     const chatMessages = document.getElementById('chat-messages');
     const btnSend = document.getElementById('btn-send');
+    const btnExplainCode = document.getElementById('btn-explain-code');
+    const btnClearChat = document.getElementById('btn-clear-chat');
 
     // --- Theme Toggle ---
     const themeToggle = document.getElementById('theme-toggle');
@@ -51,8 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
         this.style.height = (this.scrollHeight) + 'px';
         if (this.value.trim() === '') {
             btnSend.disabled = true;
+            btnExplainCode.disabled = true;
         } else {
             btnSend.disabled = false;
+            btnExplainCode.disabled = false;
         }
     });
 
@@ -60,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (this.value.trim() !== '') {
-                chatForm.dispatchEvent(new Event('submit'));
+                btnSend.click();
             }
         }
     });
@@ -280,11 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (match) lang = match[1];
             }
             
-            // Create wrapper
+            // Normal Code wrapping (w/ Copy button)
             const wrapper = document.createElement('div');
             wrapper.className = 'code-block-wrapper';
             
-            // Create Header
             const header = document.createElement('div');
             header.className = 'code-header';
             header.innerHTML = `
@@ -295,12 +298,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 </button>
             `;
             
-            // Replace pre with wrapper containing header and original pre
             pre.parentNode.insertBefore(wrapper, pre);
             wrapper.appendChild(header);
             wrapper.appendChild(pre);
             
-            // Add copy functionality
             const copyBtn = header.querySelector('.copy-btn');
             copyBtn.addEventListener('click', () => {
                 const codeText = pre.innerText;
@@ -337,9 +338,35 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="message-content">
                 ${htmlContent}
+                <div class="message-actions" style="margin-top: 10px; text-align: right;">
+                    <button class="copy-answer-btn btn-secondary" style="display: inline-flex; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px;" data-raw="${encodeURIComponent(markdownText)}">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy Answer
+                    </button>
+                </div>
             </div>
         `;
         chatMessages.appendChild(msgDiv);
+        
+        // Add Copy Answer listener
+        const copyBtn = msgDiv.querySelector('.copy-answer-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', function() {
+                const rawText = decodeURIComponent(this.getAttribute('data-raw'));
+                navigator.clipboard.writeText(rawText).then(() => {
+                    const originalHTML = this.innerHTML;
+                    this.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="var(--success)" stroke-width="2" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!`;
+                    this.style.color = 'var(--success)';
+                    this.style.borderColor = 'var(--success)';
+                    setTimeout(() => {
+                        this.innerHTML = originalHTML;
+                        this.style.color = '';
+                        this.style.borderColor = '';
+                    }, 2000);
+                });
+            });
+        }
+        
+
         scrollToBottom();
     }
 
@@ -402,8 +429,115 @@ document.addEventListener('DOMContentLoaded', () => {
                         aiText += decoder.decode(value, { stream: true });
                         let htmlContent = marked.parse(aiText);
                         htmlContent = wrapCodeBlocksWithCopy(htmlContent);
-                        contentDiv.innerHTML = htmlContent;
+                        // For streaming, we append the copy button outline but don't bind it fully until done
+                        contentDiv.innerHTML = htmlContent + `
+                <div class="message-actions" style="margin-top: 10px; text-align: right;">
+                    <button class="copy-answer-btn btn-secondary" style="display: inline-flex; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px;" data-raw="${encodeURIComponent(aiText)}">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy Answer
+                    </button>
+                </div>
+                        `;
                         scrollToBottom();
+                        
+                        // Re-bind listener
+                        const copyBtn = msgDiv.querySelector('.copy-answer-btn');
+                        if (copyBtn) {
+                            copyBtn.addEventListener('click', function() {
+                                const rawText = decodeURIComponent(this.getAttribute('data-raw'));
+                                navigator.clipboard.writeText(rawText).then(() => {
+                                    const originalHTML = this.innerHTML;
+                                    this.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="var(--success)" stroke-width="2" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!`;
+                                    setTimeout(() => { this.innerHTML = originalHTML; }, 2000);
+                                });
+                            });
+                        }
+                    }
+                    
+                }
+            } else {
+                const data = await response.json().catch(() => ({}));
+                appendAssistantMessage(`**Error:** ${data.detail || "Failed to get response"}`);
+            }
+        } catch (error) {
+            appendAssistantMessage(`**Connection Error:** Could not reach the API. Is your server running?`);
+        }
+    });
+
+    // Handle Explain Code
+    btnExplainCode.addEventListener('click', async () => {
+        const code = chatInput.value.trim();
+        if (!code) return;
+        
+        const welcome = document.querySelector('.welcome-message');
+        if (welcome) welcome.style.display = 'none';
+        
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+        btnSend.disabled = true;
+        btnExplainCode.disabled = true;
+        
+        appendUserMessage("Explain this code:\\n```\\n" + code + "\\n```");
+        showTypingIndicator();
+        
+        try {
+            const response = await fetch('/api/explain-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            });
+            
+            if (response.ok) {
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await response.json();
+                    appendAssistantMessage(data.answer || data.detail);
+                } else {
+                    // Streaming response
+                    removeTypingIndicator();
+                    
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'message assistant';
+                    msgDiv.innerHTML = `
+                        <div class="avatar assistant-avatar">
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>
+                        </div>
+                        <div class="message-content"></div>
+                    `;
+                    chatMessages.appendChild(msgDiv);
+                    const contentDiv = msgDiv.querySelector('.message-content');
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let aiText = "";
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        aiText += decoder.decode(value, { stream: true });
+                        let htmlContent = marked.parse(aiText);
+                        htmlContent = wrapCodeBlocksWithCopy(htmlContent);
+                        contentDiv.innerHTML = htmlContent + `
+                <div class="message-actions" style="margin-top: 10px; text-align: right;">
+                    <button class="copy-answer-btn btn-secondary" style="display: inline-flex; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px;" data-raw="${encodeURIComponent(aiText)}">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy Answer
+                    </button>
+                </div>
+                        `;
+                        scrollToBottom();
+                        
+                        // Re-bind listener
+                        const copyBtn = msgDiv.querySelector('.copy-answer-btn');
+                        if (copyBtn) {
+                            copyBtn.addEventListener('click', function() {
+                                const rawText = decodeURIComponent(this.getAttribute('data-raw'));
+                                navigator.clipboard.writeText(rawText).then(() => {
+                                    const originalHTML = this.innerHTML;
+                                    this.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="var(--success)" stroke-width="2" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!`;
+                                    setTimeout(() => { this.innerHTML = originalHTML; }, 2000);
+                                });
+                            });
+                        }
                     }
                 }
             } else {
@@ -413,6 +547,17 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             appendAssistantMessage(`**Connection Error:** Could not reach the API. Is your server running?`);
         }
+    });
+
+    // Handle Clear Chat
+    btnClearChat.addEventListener('click', () => {
+        // Remove all messages except the welcome message if it existed
+        const messages = chatMessages.querySelectorAll('.message:not(.welcome-message)');
+        messages.forEach(msg => msg.remove());
+        
+        // Show welcome message again
+        const welcome = document.querySelector('.welcome-message');
+        if (welcome) welcome.style.display = 'flex';
     });
 
     // Add CSS block for the spin animation used in the refresh button

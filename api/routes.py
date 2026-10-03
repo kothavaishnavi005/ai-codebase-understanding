@@ -1,10 +1,19 @@
 import os
+import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 # Import RAG engine and ingestion logic
 from rag.engine import get_rag_engine
 from rag.ingest import process_codebase
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
 router = APIRouter()
 
@@ -23,11 +32,15 @@ class IndexRequest(BaseModel):
 class ChatRequest(BaseModel):
     question: str
 
+class ExplainCodeRequest(BaseModel):
+    code: str
+
 def run_indexing_task(target_path: str):
     """Background task to process and index documents."""
     global ingest_status
     ingest_status["is_indexing"] = True
     ingest_status["last_error"] = None
+    ingest_status["last_success"] = None
     
     try:
         # Get absolute path and strip surrounding quotes
@@ -36,7 +49,7 @@ def run_indexing_task(target_path: str):
         if not os.path.exists(abs_path):
             raise Exception(f"Path does not exist: {abs_path}")
             
-        print(f"Starting background index for {abs_path}")
+        logger.info(f"Starting background index for {abs_path}")
         
         # Parse and chunk documents
         chunks = process_codebase(abs_path)
@@ -44,16 +57,15 @@ def run_indexing_task(target_path: str):
         # Get engine and initialize DB with new documents
         engine = get_rag_engine()
         # For simplicity, we clear the DB entirely to index the single target codebase each time
-        # In a multi-tenant app, we'd use namespaces/collection partitions
         engine.clear_database()
         
         # Add to ChromaDB
         engine.add_documents(chunks)
         
-        print(f"Successfully indexed {len(chunks)} document chunks.")
+        logger.info(f"Successfully indexed {len(chunks)} document chunks.")
         ingest_status["last_success"] = f"Indexed {len(chunks)} chunks from {abs_path}"
     except Exception as e:
-        print(f"Error during indexing task: {e}")
+        logger.error(f"Error during indexing task: {e}", exc_info=True)
         ingest_status["last_error"] = str(e)
     finally:
         ingest_status["is_indexing"] = False
@@ -95,10 +107,25 @@ def chat_with_codebase(request: ChatRequest):
         answer = engine.query(request.question)
         return {"answer": answer}
     except Exception as e:
-        print(f"Error during chain invocation: {e}")
+        logger.error(f"Error during chain invocation: {e}", exc_info=True)
         # One common error implies missing OPENAI_API_KEY
         if "api key" in str(e).lower():
             raise HTTPException(status_code=500, detail="LLM Provider API Key missing or invalid.")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/explain-code")
+def explain_code_endpoint(request: ExplainCodeRequest):
+    """Explain a provided code snippet."""
+    if not request.code:
+        logger.warning("Rejecting explain-code request with empty snippet")
+        raise HTTPException(status_code=400, detail="Code cannot be empty")
+        
+    engine = get_rag_engine()
+    try:
+        answer = engine.explain_code(request.code)
+        return {"answer": answer}
+    except Exception as e:
+        logger.error(f"Error during explain-code chain invocation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/status")
